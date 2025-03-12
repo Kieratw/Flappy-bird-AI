@@ -1,8 +1,5 @@
-from game import Game
-
+from game_manager import GameManager
 
 if __name__ == "__main__":
-
-    game=Game(800,700)
-    game.run()
-
+    manager = GameManager()
+    manager.run()
