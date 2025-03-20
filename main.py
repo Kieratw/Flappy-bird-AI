@@ -1,90 +1,104 @@
-#from game_manager import GameManager
-
-#if __name__ == "__main__":
- #   manager = GameManager()
-  #  manager.run()
-
-
-import torch
-import torch.optim as optim
-import torch.nn as nn
 import numpy as np
-from collections import deque
-import random
-from FlappyBirdEnv import FlappyBirdEnv  # Twoja klasa środowiska
-from model import FlappyBirdModel            # Twój model DQN
 import pygame
+from FlappyBirdEnv import FlappyBirdEnv
+from bird import Bird
+from model import BirdModel as NeuralBird
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-env = FlappyBirdEnv()
-
-modelv1 = FlappyBirdModel().to(device)
-optimizer = optim.Adam(modelv1.parameters(), lr=0.01)
-memory  = deque(maxlen=1000000)
-
-episodes = 2000
-batch_size = 32
-gamma = 0.99
-epsilon = 1.0
-epsilon_decay = 0.995
-epsilon_min = 0.01
-
-
-for episode in range(episodes):
-    state, _ = env.reset()
-    state=torch.tensor(state).unsqueeze(0).unsqueeze(0).float().to(device)
+def run_episode(env):
+    """
+    Uruchamia epizod w środowisku, w którym symulowane są wszystkie ptaki.
+    Zwraca: wektor całkowitych nagród dla każdego ptaka.
+    """
+    total_rewards = np.zeros(len(env.game.birds))
     done = False
-    total_reward = 0
-
     while not done:
-        # wybór akcji (epsilon-greedy)
-        if np.random.random() < epsilon:
-            action = random.randint(0, 1)
-        else:
-            with torch.no_grad():
-                q_values = modelv1(state)
-                action = q_values.argmax().item()
+        states = env.get_state()  # Stan dla każdego ptaka
+        actions = []
+        for i, bird in enumerate(env.game.birds):
+            if getattr(bird, 'dead', False):
+                actions.append(0)
+            else:
+                actions.append(bird.get_action(states[i]))
+        state, rewards, done, _, _ = env.step(actions)
+        total_rewards += rewards
+        if env.render_mode:
+            env.render()
+            pygame.display.flip()
+            env.game.clock.tick(60)
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    done = True
+    return total_rewards
 
-        # Wykonanie akcji w środowisku
-        next_state, reward, done, truncated, _ = env.step(action)
-        next_state_tensor = torch.tensor(next_state).unsqueeze(0).unsqueeze(0).float().to(device)
+if __name__ == "__main__":
+    pygame.init()
+    num_birds = 50
+    generations = 50
+    mutation_rate = 0.2
+    mutation_std = 0.2
 
-        # Zapisz doświadczenie
-        memory.append((state, action, reward, next_state_tensor, done))
+    # Inicjalizacja populacji – każdy ptak to instancja sieci neuronowej
+    population = []
+    for _ in range(num_birds):
+        brain = NeuralBird()  # Tworzymy model sieci
+        agent = Bird(400, 100, model=brain)  # Tworzymy obiekt ptaka z fizyką i grafiką, do którego dołączamy model
+        population.append(agent)
 
-        state = next_state_tensor
-        if done or truncated:
-            state, _ = env.reset()
-            state = torch.tensor(state).unsqueeze(0).unsqueeze(0).float().to(device)
+    best_bird = None
+    best_score = -np.inf
 
-        # Trening sieci
-        if len(memory) > batch_size:
-            batch = random.sample(memory, batch_size)
-            states, actions, rewards, next_states, dones = zip(*batch)
+    for gen in range(1, generations + 1):
+        # Tworzymy środowisko (bez renderowania dla szybkości treningu)
+        env = FlappyBirdEnv(width=800, height=600, render_mode=True, num_birds=num_birds)
+        env.reset(birds=population)
+        total_rewards = run_episode(env)
+        env.close()
 
-            states = torch.cat(states).to(device)
-            actions = torch.tensor(actions).to(device)
-            rewards = torch.tensor(rewards).to(device)
-            next_states = torch.cat(next_states).to(device)
-            dones = torch.tensor(dones, dtype=torch.float32).to(device)
+        gen_best_idx = int(np.argmax(total_rewards))
+        gen_best_score = total_rewards[gen_best_idx]
+        gen_avg_score = np.mean(total_rewards)
+        print(f"Generacja {gen}: najlepszy wynik = {gen_best_score:.2f}, średni wynik = {gen_avg_score:.2f}")
+        print(type(population[gen_best_idx]))
+        print(hasattr(population[gen_best_idx], 'brain'))
+        print(type(population[gen_best_idx].brain) if hasattr(population[gen_best_idx],
+                                                              'brain') else 'No brain attribute')
+        if gen_best_score > best_score:
+            best_score = gen_best_score
+            best_bird = Bird(400, 100, model=NeuralBird())
+            best_bird.brain.load_state_dict(population[gen_best_idx].brain.state_dict())
 
-            current_q = modelv1(states).gather(1, actions.unsqueeze(1)).squeeze(1)
-            max_next_q = modelv1(next_states).max(1)[0]
-            expected_q = rewards + (1 - dones) * gamma * max_next_q
+        # Selekcja: zachowujemy dwóch najlepszych, a resztę uzupełniamy mutowanymi kopiami
+        sorted_indices = np.argsort(total_rewards)[::-1]
+        new_population = []
+        new_population.append(population[sorted_indices[0]])
+        if len(sorted_indices) > 1:
+            new_population.append(population[sorted_indices[1]])
+        while len(new_population) < num_birds:
+            parent_idx = sorted_indices[0] if np.random.rand() < 0.5 else sorted_indices[1]
+            parent = population[parent_idx]
+            child = Bird(400, 100, model=NeuralBird())
+            # Poprawione wywołanie:
+            child.brain.load_state_dict(parent.brain.state_dict())
+            child.mutate(mutation_rate=mutation_rate, std=mutation_std)
+            new_population.append(child)
+        population = new_population
 
-            loss = nn.MSELoss()(current_q, expected_q.detach())
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-        env.render()
-    # Zmniejszanie epsilon
-    if epsilon > epsilon_min:
-        epsilon *= epsilon_decay
+    print(f"\nNajlepszy wynik osiągnięty przez sieć: {best_score:.2f} punktów")
 
-    # Informacje o postępie
-    if episode % 50 == 0:
-        print(f"Episode {episode}, epsilon: {epsilon:.3f}")
-
-torch.save(modelv1.state_dict(), "flappy_bird_model.pth")
-
+    # Demonstracja – uruchamiamy środowisko z renderowaniem i pojedynczym (najlepszym) ptakiem
+    demo_env = FlappyBirdEnv(width=800, height=600, render_mode=True, num_birds=1)
+    demo_env.reset(birds=[best_bird])
+    done = False
+    print("Uruchamianie demonstracji... (zamknij okno, aby zakończyć)")
+    while not done:
+        state = demo_env.get_state()[0]  # tylko jeden ptak
+        action = best_bird.get_action(state)
+        state, reward, done, _, _ = demo_env.step([action])
+        demo_env.render()
+        pygame.display.flip()
+        demo_env.game.clock.tick(60)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                done = True
+    demo_env.close()
+    pygame.quit()

@@ -1,15 +1,19 @@
 import pygame
+import torch
+import random
 
 class Bird:
     gravity = 0.5
-    lift = -8
+    lift = -4
     max_fall_speed=9
     max_rise_speed=10
-    def __init__(self,x,y):
+    def __init__(self,x,y,model=None):
         self.x=x
         self.y=y
         self.velocity=0
-
+        self.brain = model
+        self.score = 0
+        self.dead = False
         try:
             self.image= pygame.image.load('assets/bird.png')
             self.image=pygame.transform.scale(self.image,(30,40))
@@ -50,3 +54,18 @@ class Bird:
     def get_mask(self):
         return self.mask
 
+    def get_action(self, state):
+        # Jeśli model nie jest przypisany, domyślnie nie wykonujemy skoku
+        if self.brain is None:
+            return 0
+        state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(self.brain.device)
+        with torch.no_grad():
+            q_values = self.brain.model(state_tensor)
+        return q_values.argmax().item()
+
+    def mutate(self, mutation_rate=0.1, std=0.1):
+        if self.brain is None:
+            return
+        for param in self.brain.model.parameters():
+            if random.random() < mutation_rate:
+                param.data += torch.randn_like(param) * std
