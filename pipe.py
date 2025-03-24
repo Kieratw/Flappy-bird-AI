@@ -2,8 +2,8 @@ import pygame
 import random
 class Pipe:
 
-    gap=50
-    width=300
+    gap=150
+    width=80
     speed=3
     platform_height=130
     def __init__(self,x,screen_height):
@@ -14,7 +14,8 @@ class Pipe:
 
         # Ładowanie obrazu rury
         try:
-            base_image = pygame.image.load("assets/pipe.png").convert_alpha()
+           base_image = pygame.image.load("assets/pipe.png").convert_alpha()
+
         except pygame.error as e:
             print(f"Nie można załadować obrazu rury: {e}. Używam prostokąta.")
             base_image = pygame.Surface((Pipe.width, 200))  # Fallback na prostokąt

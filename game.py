@@ -8,7 +8,6 @@ class Game:
         self.height = height
         self.render_mode = render_mode
         self.birds = birds
-
         self.screen = None
         if self.render_mode:
             self.screen = pygame.display.set_mode((self.width, self.height))
@@ -58,10 +57,11 @@ class Game:
         for pipe in self.pipes:
             pipe.update()
             for bird in self.birds:
-                if (not getattr(bird, 'dead', False)) and (not getattr(bird, 'passed', False)) and (pipe.x + Pipe.width < bird.x):
+                if (not getattr(bird, 'dead', False)) and (pipe not in bird.passed_pipes) and (pipe.x + Pipe.width < bird.x):
                     bird.passed = True  # Oznaczamy, że ptak miniął tę rurę
                     # Przydzielamy punkt – zakładamy, że każdy ptak ma atrybut score
-                    bird.score = getattr(bird, 'score', 0) + 1
+                    bird.score = getattr(bird, 'score', 0)
+                    bird.passed_pipes.add(pipe)
 
         # Usuwanie rur poza ekranem
         self.pipes = [pipe for pipe in self.pipes if pipe.x + Pipe.width > 0]
@@ -100,26 +100,54 @@ class Game:
     def draw(self):
         if not self.render_mode:
             return
+            # Rysowanie tła i platform
         self.screen.blit(self.background_image, (0, 0))
         self.screen.blit(self.platform_image, (self.platform_x, self.height - self.platform_rect.height))
-        self.screen.blit(self.platform_image, (self.platform_x + self.platform_rect.width // 2, self.height - self.platform_rect.height))
+        self.screen.blit(self.platform_image,
+                         (self.platform_x + self.platform_rect.width // 2, self.height - self.platform_rect.height))
+
+        # Rysowanie rur
         for pipe in self.pipes:
             pipe.draw(self.screen)
-        for bird in self.birds:
-            if not getattr(bird, 'dead', False):
-                bird.draw(self.screen)
-        score_text = self.font.render(f"Score: {max([getattr(bird, 'score', 0) for bird in self.birds])}", True, (255, 255, 255))
+
+        # Filtrowanie żywych ptaków
+        alive_birds = [bird for bird in self.birds if not getattr(bird, 'dead', False)]
+
+        # Rysowanie tylko żywych ptaków
+        for bird in alive_birds:
+            bird.draw(self.screen)
+
+        # Wyliczenie wyniku najlepszego żywego ptaka; jeśli wszyscy są martwi, wybieramy najwyższy wynik wśród wszystkich
+        if alive_birds:
+            best_score = max(len(bird.passed_pipes) for bird in alive_birds)
+        else:
+            best_score = max(bird.score for bird in self.birds)
+
+        # Renderowanie tekstu: wynik najlepszego ptaka i liczba żywych ptaków
+        score_text = self.font.render(f"Najlepszy ptak: {best_score}", True, (255, 255, 255))
+        alive_text = self.font.render(f"Ptaki na żywo: {len(alive_birds)}", True, (255, 255, 255))
         self.screen.blit(score_text, (10, 10))
+        self.screen.blit(alive_text, (10, 50))
 
     def reset(self, birds=None):
-        # Resetowanie gry – jeśli podamy nową listę ptaków, użyj jej; w przeciwnym razie resetuj aktualnych
+        # Zawsze resetuj stan ptaków, nawet jeśli są przekazane jako argument
         if birds is not None:
+            for bird in birds:
+                bird.dead = False
+                bird.score = 0
+                bird.passed = False
+                bird.passed_pipes.clear()
+                bird.x = 400
+                bird.y = 100
+                bird.velocity = 0
+                bird.rect.center = (bird.x, bird.y)
             self.birds = birds
         else:
             for bird in self.birds:
                 bird.dead = False
                 bird.score = 0
                 bird.passed = False
+                bird.passed_pipes.clear()
                 bird.x = 400
                 bird.y = 100
                 bird.velocity = 0

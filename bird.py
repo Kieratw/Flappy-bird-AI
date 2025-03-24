@@ -13,6 +13,7 @@ class Bird:
         self.velocity=0
         self.brain = model
         self.score = 0
+        self.passed_pipes = set()
         self.dead = False
         try:
             self.image= pygame.image.load('assets/bird.png')
