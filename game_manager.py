@@ -1,20 +1,23 @@
 import pygame
+from bird import Bird
+from game import Game
 
 class GameManager:
-    def __init__(self, width=800, height=600):
+    def __init__(self,screen, width=800, height=600):
         self.width = width
         self.height = height
-        self.screen = pygame.display.set_mode((self.width, self.height))
+
+        self.screen = screen
+
         self.clock = pygame.time.Clock()
 
-        from game import Game  # Importujemy Game tutaj, aby uniknąć cyklicznych importów
-        self.game = Game(self.width, self.height)
 
-        # Czcionki
+        self.bird = Bird(400, 100)
+        self.game = Game(self.width, self.height, birds=[self.bird])
+
         self.font = pygame.font.SysFont(None, 48)
         self.large_font = pygame.font.SysFont(None, 72)
 
-        # Stan gry
         self.state = "menu"
 
     def draw_menu(self):
@@ -29,7 +32,7 @@ class GameManager:
         start_rect = start_text.get_rect(center=(self.width // 2, self.height // 2))
 
         self.screen.blit(title_text, title_rect)
-        pygame.draw.rect(self.screen, (0, 0, 255), start_rect.inflate(20, 20))  # Niebieski przycisk
+        pygame.draw.rect(self.screen, (0, 0, 255), start_rect.inflate(20, 20))
         self.screen.blit(start_text, start_rect)
 
         return start_rect
@@ -40,7 +43,7 @@ class GameManager:
         self.screen.blit(self.game.platform_image, (self.game.platform_x + self.game.platform_rect.width // 2, self.height - self.game.platform_rect.height))
 
         game_over_text = self.large_font.render("Game Over", True, (255, 0, 0))
-        score_text = self.font.render(f"Score: {self.game.score}", True, (255, 255, 255))
+        score_text = self.font.render(f"Score:{self.bird.score}", True, (255, 255, 255))
         restart_text = self.font.render("Restart", True, (255, 255, 255))
 
         game_over_rect = game_over_text.get_rect(center=(self.width // 2, self.height // 3))
@@ -49,7 +52,7 @@ class GameManager:
 
         self.screen.blit(game_over_text, game_over_rect)
         self.screen.blit(score_text, score_rect)
-        pygame.draw.rect(self.screen, (0, 255, 0), restart_rect.inflate(20, 20))  # Zielony przycisk
+        pygame.draw.rect(self.screen, (0, 255, 0), restart_rect.inflate(20, 20))
         self.screen.blit(restart_text, restart_rect)
 
         return restart_rect
@@ -69,7 +72,7 @@ class GameManager:
                             self.state = "game"
 
             elif self.state == "game":
-                game_over, score = self.game.update()
+                game_over, _ = self.game.update()
                 self.game.draw()
                 pygame.display.flip()
                 self.clock.tick(60)
@@ -80,7 +83,7 @@ class GameManager:
                         return
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_SPACE:
-                            self.game.bird.jump()
+                            self.bird.jump()
 
                 if game_over:
                     self.state = "game_over"
@@ -95,5 +98,5 @@ class GameManager:
                         return
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         if restart_rect.collidepoint(event.pos):
-                            self.game.reset()
+                            self.game.reset(birds=[self.bird])
                             self.state = "game"

@@ -9,6 +9,7 @@ class Game:
         self.render_mode = render_mode
         self.birds = birds
         self.screen = None
+
         if self.render_mode:
             self.screen = pygame.display.set_mode((self.width, self.height))
         self.clock = pygame.time.Clock()
@@ -124,8 +125,8 @@ class Game:
             best_score = max(bird.score for bird in self.birds)
 
         # Renderowanie tekstu: wynik najlepszego ptaka i liczba żywych ptaków
-        score_text = self.font.render(f"Najlepszy ptak: {best_score}", True, (255, 255, 255))
-        alive_text = self.font.render(f"Ptaki na żywo: {len(alive_birds)}", True, (255, 255, 255))
+        score_text = self.font.render(f"Best Bird: {best_score}", True, (255, 255, 255))
+        alive_text = self.font.render(f"Birds alive: {len(alive_birds)}", True, (255, 255, 255))
         self.screen.blit(score_text, (10, 10))
         self.screen.blit(alive_text, (10, 50))
 

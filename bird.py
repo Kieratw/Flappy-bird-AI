@@ -4,8 +4,8 @@ import random
 
 class Bird:
     gravity = 0.5
-    lift = -4
-    max_fall_speed=9
+    lift = -6
+    max_fall_speed=7
     max_rise_speed=10
     def __init__(self,x,y,model=None):
         self.x=x
@@ -56,7 +56,7 @@ class Bird:
         return self.mask
 
     def get_action(self, state):
-        # Jeśli model nie jest przypisany, domyślnie nie wykonujemy skoku
+
         if self.brain is None:
             return 0
         state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(self.brain.device)
